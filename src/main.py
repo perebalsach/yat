@@ -5,7 +5,7 @@ import os
 import time
 import tempfile
 import logging
-import pygame # Still used for the click sound
+import pygame 
 import librosa
 import librosa.display
 import numpy as np
@@ -14,7 +14,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import yt_dlp
 from pydub import AudioSegment
 from pydub.generators import Sine
-import vlc # <-- NEW: The main player
+import vlc 
 
 # --- Setup Logging ---
 def setup_logging():
@@ -228,6 +228,8 @@ class AudioToolApp:
         
         self.set_playback_speed(self.speed_scale.get())
 
+        self.root.bind("<space>", self.toggle_play_pause)
+
     # --- NEW: Live speed control ---
     def set_playback_speed(self, value_str):
         """Called by the speed slider to change speed LIVE."""
@@ -241,6 +243,20 @@ class AudioToolApp:
             
         except (ValueError, tk.TclError):
             pass
+
+    def toggle_play_pause(self, event=None):
+        """Toggles play/pause. Bound to spacebar."""
+        # Ignore spacebar presses when an entry widget has focus
+        if isinstance(self.root.focus_get(), (ttk.Entry, tk.Entry)):
+            return
+            
+        if not self.current_file:
+            return
+            
+        if self.is_playing:
+            self.pause_audio()
+        else:
+            self.play_audio()
 
     def paste_from_clipboard(self):
         try:
@@ -377,7 +393,7 @@ class AudioToolApp:
                 self.root.after(0, self.progressbar.stop)
                 self.root.after(0, lambda: self.progressbar.config(mode='determinate'))
                 self.root.after(0, lambda: self.process_button.config(state="normal"))
-                self.root.after(0, lambda: self.load_disk_button.config(state="normal")
+                self.root.after(0, lambda: self.load_disk_button.config(state="normal"))
                 self.root.after(0, lambda: self.sync_button.config(state="normal"))
             except tk.TclError:
                 pass
@@ -640,48 +656,51 @@ class AudioToolApp:
 
     def on_waveform_press(self, event):
         """Handles the start of a loop selection (left-click) or clears the loop (right-click)."""
-        # Ignore clicks outside the axes
         if event.inaxes != self.ax:
             return
 
-        # Right-click to clear selection
-        if event.button == 3:
-            self.clear_loop_selection()
-            self.update_status("Loop selection cleared.")
-            return
-
-        # Left-click to start selection
         if event.button == 1:
             if not self.current_file:
                 return
             self.clear_loop_selection()
             self.loop_start_sec = max(0, event.xdata)
-            # FIX: Get the Polygon object from the list returned by axvspan
-            self.loop_span = self.ax.axvspan(self.loop_start_sec, self.loop_start_sec, color='red', alpha=0.3)[0]
+            # FIX: Get the Polygon object returned by axvspan
+            self.loop_span = self.ax.axvspan(self.loop_start_sec, self.loop_start_sec, color='red', alpha=0.3)
+            self.canvas.draw_idle()
+
+        elif event.button == 3:
+            self.clear_loop_selection()
+            self.loop_start_sec = None
+            self.loop_end_sec = None
             self.canvas.draw_idle()
 
     def on_waveform_drag(self, event):
-        """Handles dragging to select a loop range."""
-        if self.loop_span is None or event.inaxes != self.ax:
+        """Updates the loop selection region as the user drags the mouse."""
+        if not self.loop_span or event.inaxes != self.ax:
             return
-        
-        loop_end = max(0, event.xdata)
-        
-        verts = self.loop_span.get_xy()
-        verts[1][0] = loop_end
-        verts[2][0] = loop_end
-        self.loop_span.set_xy(verts)
-        self.canvas.draw_idle()
+
+        end_sec = max(0, event.xdata)
+        if end_sec != self.loop_start_sec:
+            self.loop_end_sec = end_sec
+            verts = self.loop_span.get_xy()
+            verts[0][0] = verts[3][0] = self.loop_start_sec
+            verts[1][0] = verts[2][0] = self.loop_end_sec
+            self.loop_span.set_xy(verts)
+            self.canvas.draw_idle()
 
     def on_waveform_release(self, event):
         """Handles the end of a loop selection."""
+        logger.debug(f"on_waveform_release: event={event.button}, xdata={event.xdata}, loop_span={'exists' if self.loop_span else 'None'}, inaxes={event.inaxes == self.ax}")
         if self.loop_span is None or event.inaxes != self.ax or event.button != 1:
+            logger.debug("on_waveform_release: No loop_span, release outside axes, or not left-click, ignoring.")
             return
             
         self.loop_end_sec = max(0, event.xdata)
+        logger.debug(f"on_waveform_release: Left-click released, loop_end_sec set to {self.loop_end_sec}")
 
         if self.loop_start_sec is not None and self.loop_end_sec is not None:
             if self.loop_start_sec > self.loop_end_sec:
+                logger.debug(f"on_waveform_release: Swapping loop_start_sec ({self.loop_start_sec}) and loop_end_sec ({self.loop_end_sec})")
                 self.loop_start_sec, self.loop_end_sec = self.loop_end_sec, self.loop_start_sec
             
             verts = self.loop_span.get_xy()
@@ -694,6 +713,7 @@ class AudioToolApp:
             self.canvas.draw_idle()
             self.update_status(f"Loop selected from {self.loop_start_sec:.2f}s to {self.loop_end_sec:.2f}s")
             self.loop_active.set(True) # Automatically activate loop on selection
+            logger.debug(f"on_waveform_release: Loop finalized: start={self.loop_start_sec}, end={self.loop_end_sec}, loop_active={self.loop_active.get()}")
 
     def clear_loop_selection(self):
         """Removes the visual loop span and resets the state."""
@@ -787,7 +807,7 @@ class AudioToolApp:
                     self.root.after(0, self.progressbar.stop)
                     self.root.after(0, lambda: self.progressbar.config(mode='determinate'))
                     self.root.after(0, lambda: self.sync_button.config(state="normal"))
-                    self.root.after(0, lambda: self.process_button.config(state="normal")
+                    self.root.after(0, lambda: self.process_button.config(state="normal"))
                     self.root.after(0, lambda: self.load_disk_button.config(state="normal"))
             except tk.TclError:
                 pass
@@ -847,3 +867,4 @@ if __name__ == "__main__":
     app = AudioToolApp(root)
     root.protocol("WM_DELETE_WINDOW", app.on_closing)
     root.mainloop()
+
