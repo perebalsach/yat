@@ -82,6 +82,7 @@ class AudioToolApp:
             self.metronome_channel = pygame.mixer.Channel(0) 
             self.generate_click_sound()
         except Exception as e:
+            logger.exception("Could not initialize audio mixer")
             messagebox.showerror("Pygame Error", f"Could not initialize audio mixer: {e}")
             root.destroy()
             return
@@ -91,6 +92,7 @@ class AudioToolApp:
             self.vlc_instance = vlc.Instance()
             self.player = self.vlc_instance.media_player_new()
         except Exception as e:
+            logger.exception("Could not initialize libvlc")
             messagebox.showerror("VLC Error", f"Could not initialize libvlc. Is it installed? \nError: {e}")
             root.destroy()
             return
@@ -103,7 +105,7 @@ class AudioToolApp:
             click.export(TEMP_CLICK_FILE, format="wav")
             self.click_sound = pygame.mixer.Sound(TEMP_CLICK_FILE)
         except Exception as e:
-            print(f"Error generating click sound: {e}")
+            logger.error(f"Error generating click sound: {e}")
             self.click_sound = None
 
     def create_widgets(self):
@@ -301,6 +303,7 @@ class AudioToolApp:
             self.player.set_rate(1.0)
 
         except Exception as e:
+            logger.exception(f"Could not load the selected file: {filepath}")
             self.update_status(f"Error loading file: {e}")
             messagebox.showerror("Load Error", f"Could not load the selected file.\n\nError: {e}")
             self.current_file = None
@@ -363,8 +366,8 @@ class AudioToolApp:
                 return
 
         except Exception as e:
+            logger.exception("An error occurred during download and process")
             self.update_status(f"Error: {e}")
-            print(f"Full Error: {e}")
             try:
                 self.root.after(0, self.update_progressbar, 0)
             except tk.TclError:
@@ -380,6 +383,7 @@ class AudioToolApp:
                 pass
     
     def update_status(self, message):
+        logger.info(message)
         try:
             if self.root.winfo_exists():
                 self.root.after(0, lambda: self.status_label.config(text=message))
@@ -446,6 +450,7 @@ class AudioToolApp:
             except tk.TclError:
                 pass
             except Exception as e:
+                logger.error(f"Error plotting waveform: {e}")
                 self.update_status(f"Error plotting waveform: {e}")
         try:
             if self.root.winfo_exists():
@@ -497,7 +502,7 @@ class AudioToolApp:
         except tk.TclError:
             pass 
         except Exception as e:
-            print(f"Error in update_playback_head: {e}")
+            logger.error(f"Error in update_playback_head: {e}")
             self.is_playing = False
 
     def reset_metronome_timer(self, current_ms=None):
@@ -696,7 +701,7 @@ class AudioToolApp:
             try:
                 self.loop_span.remove()
             except Exception as e:
-                print(f"Error removing loop span: {e}")
+                logger.error(f"Error removing loop span: {e}")
         self.loop_span = None
         self.loop_start_sec = None
         self.loop_end_sec = None
@@ -775,7 +780,7 @@ class AudioToolApp:
         except Exception as e:
             if self.root.winfo_exists():
                 self.root.after(0, self.update_status, f"Sync Error: {e}")
-            print(f"Beat analysis error: {e}")
+            logger.exception("Beat analysis error")
         finally:
             try:
                 if self.root.winfo_exists():
@@ -809,8 +814,8 @@ class AudioToolApp:
         except tk.TclError:
             pass
         except Exception as e:
+            logger.error(f"Error applying sync: {e}")
             self.update_status(f"Error applying sync: {e}")
-            print(f"Error in apply_sync_results: {e}")
 
     def on_closing(self):
         # 1. Stop all loops
@@ -830,7 +835,7 @@ class AudioToolApp:
                 self.vlc_instance.release()
             pygame.mixer.quit()
         except Exception as e:
-            print(f"Error during audio shutdown: {e}")
+            logger.error(f"Error during audio shutdown: {e}")
         # --- END OF FIX ---
 
         # 3. Destroy the root window (this must be LAST)
